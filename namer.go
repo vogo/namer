@@ -77,13 +77,14 @@ func getNameScore(firstName string) (int, error) {
 	}
 
 	scoreStr := content[:index]
-	return strconv.Atoi(scoreStr)
+	score, err := strconv.Atoi(scoreStr)
+	log.Printf("name score: %s = %d", firstName, score)
+	return score, err
 
 }
 
 func request(addr string) ([]byte, error) {
-	time.Sleep(time.Millisecond * 500)
-	fmt.Println("request url:", addr)
+	time.Sleep(time.Millisecond * 300)
 	resp, err := http.Get(addr)
 	if err != nil {
 		return nil, err
@@ -115,7 +116,7 @@ func printTop10() {
 	for i := 100; i >= 0 && found < 10; i-- {
 		if names, ok := scoreStat[i]; ok {
 			found++
-			fmt.Printf("score: %d, names: %v\n", i, names)
+			fmt.Printf("score: %d, names: %v\n\n", i, names)
 		}
 	}
 }
@@ -138,69 +139,81 @@ func writeScoreData() {
 	}
 }
 
-func nameTest() error {
-	err := oneFirstNameTest()
+func nameScoring() error {
+	err := oneFirstNameLoopScoring()
 	if err != nil {
 		return err
 	}
-	err = twoFirstNameTest()
+	err = twoFirstNameLoopScoring()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func oneFirstNameTest() error {
+func oneFirstNameLoopScoring() error {
 	if scoreData == nil {
 		scoreData = newScore(0)
 	}
 
 	for i := 0; i < len(keyWords); i++ {
-		firstName := keyWords[i]
-		if _, ok := scoreData.More[firstName]; ok {
-			continue
-		}
-
-		score, err := getNameScore(string(firstName))
+		err := oneFirstNameScoring(scoreData, keyWords[i])
 		if err != nil {
 			return err
 		}
-
-		scoreData.More[firstName] = newScore(score)
 	}
 	return nil
 }
 
-func twoFirstNameTest() error {
-	if scoreData == nil {
-		scoreData = newScore(0)
+func oneFirstNameScoring(parent *NameScore, firstName rune) error {
+	if _, ok := scoreData.More[firstName]; ok {
+		return nil
 	}
 
+	score, err := getNameScore(string(firstName))
+	if err != nil {
+		return err
+	}
+
+	parent.More[firstName] = newScore(score)
+	return nil
+}
+
+func twoFirstNameLoopScoring() error {
 	for i := 0; i < len(keyWords)-1; i++ {
 		for j := 1; j < len(keyWords); j++ {
 			firstName1 := keyWords[i]
 			firstName2 := keyWords[j]
 
-			parentNameScore, ok := scoreData.More[firstName1]
-			if !ok {
-				return errors.New(fmt.Sprintf("no name score for: %v", firstName1))
-			}
-			if _, ok := parentNameScore.More[firstName2]; ok {
-				continue
-			}
-
-			score, err := getNameScore(string([]rune{firstName1, firstName2}))
+			err := twoFirstNameScoring(firstName1, firstName2)
 			if err != nil {
 				return err
 			}
 
-			if parentNameScore.More == nil {
-				parentNameScore.More = make(map[rune]*NameScore, 2)
-			}
-
-			parentNameScore.More[firstName2] = newScore(score)
 		}
 	}
+	return nil
+}
+
+func twoFirstNameScoring(firstName1, firstName2 rune) error {
+	parentNameScore, ok := scoreData.More[firstName1]
+	if !ok {
+		return errors.New(fmt.Sprintf("no name score for: %v", firstName1))
+	}
+	if _, ok := parentNameScore.More[firstName2]; ok {
+		return nil
+	}
+
+	score, err := getNameScore(string([]rune{firstName1, firstName2}))
+	if err != nil {
+		return err
+	}
+
+	if parentNameScore.More == nil {
+		parentNameScore.More = make(map[rune]*NameScore, 2)
+	}
+
+	parentNameScore.More[firstName2] = newScore(score)
 	return nil
 }
 
@@ -208,7 +221,7 @@ var (
 	configFile = flag.String("c", "", "config file")
 )
 
-func startNamer() error {
+func parseConfig() error {
 	flag.Parse()
 	err := readConfigFile(*configFile)
 	if err != nil {
@@ -225,24 +238,29 @@ func startNamer() error {
 	for i := 0; i < len(words); i++ {
 		keyWords[i] = []rune(words[i])[0]
 	}
-
-	defer writeScoreData()
-
-	err = nameTest()
-	if err != nil {
-		return err
-	}
-
-	statCalculate(scoreData, config.LastName)
-
-	printTop10()
-
 	return nil
 }
 
+func loopScoring() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("namer error: %v", err)
+		}
+	}()
+
+	err := nameScoring()
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
-	err := startNamer()
+	err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
+	loopScoring()
+	writeScoreData()
+	statCalculate(scoreData, config.LastName)
+	printTop10()
 }
