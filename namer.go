@@ -11,8 +11,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -239,11 +242,16 @@ func parseConfig() error {
 	return nil
 }
 
+var (
+	scoringFinishChan = make(chan int, 1)
+)
+
 func loopScoring() {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("namer error: %v", err)
 		}
+		scoringFinishChan <- 1
 	}()
 
 	err := nameScoring()
@@ -257,7 +265,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	loopScoring()
+
+	go loopScoring()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+
+	select {
+	case sig := <-signalChan:
+		log.Printf("receive stop signal: %s", sig)
+	case <-scoringFinishChan:
+		log.Println("scoring finish")
+	}
+
 	writeScoreData()
 	statCalculate(scoreData, config.LastName)
 	printTop10()
