@@ -20,14 +20,13 @@ var (
 	baiduQimingTestUrlFormat = "https://sp0.baidu.com/5LMDcjW6BwF3otqbppnN2DJv/qiming.pae.baidu.com/data/namedetail?" +
 		"year=%d&month=%02d&day=%02d&hour=%02d&min=%02d&timeType=0&gender=0" +
 		"&flag=1&cb=jsonp1"
-	baiduTestUrlPrefix string
-	keyWords           []rune
+	baiduScorePreviousString = "\"key\":\"score\",\"value\":\""
+	baiduTestUrlPrefix       string
+	keyWords                 []rune
 
 	config    = &Config{}
 	scoreData = newScore(0)
 	scoreStat = make(map[int][]string, 100)
-
-	scorePreviousString = "\"key\":\"score\",\"value\":\""
 )
 
 type NameScore struct {
@@ -65,12 +64,12 @@ func getNameScore(firstName string) (int, error) {
 		return 0, err
 	}
 	content := string(bt)
-	index := strings.Index(content, scorePreviousString)
+	index := strings.Index(content, baiduScorePreviousString)
 	if index <= 0 {
 		return 0, errors.New("cant find score from response: " + content)
 	}
 
-	content = content[index+len(scorePreviousString):]
+	content = content[index+len(baiduScorePreviousString):]
 	index = strings.Index(content, "\"")
 	if index <= 0 {
 		return 0, errors.New("cant find score from response: " + content)
@@ -180,7 +179,7 @@ func oneFirstNameScoring(parent *NameScore, firstName rune) error {
 }
 
 func twoFirstNameLoopScoring() error {
-	for i := 0; i < len(keyWords)-1; i++ {
+	for i := 0; i < len(keyWords); i++ {
 		for j := 1; j < len(keyWords); j++ {
 			firstName1 := keyWords[i]
 			firstName2 := keyWords[j]
@@ -189,7 +188,6 @@ func twoFirstNameLoopScoring() error {
 			if err != nil {
 				return err
 			}
-
 		}
 	}
 	return nil
