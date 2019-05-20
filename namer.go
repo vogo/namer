@@ -19,6 +19,11 @@ import (
 	"time"
 )
 
+const (
+	dataFileSuffix          = ".data"
+	dataCandidateFileSuffix = ".candidate.data"
+)
+
 var (
 	baiduQimingTestUrlFormat = "https://sp0.baidu.com/5LMDcjW6BwF3otqbppnN2DJv/qiming.pae.baidu.com/data/namedetail?" +
 		"year=%d&month=%02d&day=%02d&hour=%02d&min=%02d&timeType=0&gender=0" +
@@ -27,14 +32,17 @@ var (
 	baiduTestUrlPrefix       string
 	keyWords                 []rune
 
-	config    = &Config{}
-	scoreData = newScore(0)
-	scoreStat = make(map[int][]string, 100)
+	config         = &Config{}
+	scoreDB        = newScore(0)
+	scoreStat      = make(map[int][]string, 100)
+	candidates     = make(map[string]int, 100)
+	lastNameLength = 0
 )
 
 type NameScore struct {
-	Score int                 `json:"score"`
-	More  map[rune]*NameScore `json:"more,omitempty"`
+	Score int                 `json:"s"`
+	More  map[rune]*NameScore `json:"m,omitempty"`
+	Read  int                 `json:"r"` // 0: unread, 1: read
 }
 
 func newScore(score int) *NameScore {
@@ -50,6 +58,7 @@ type Config struct {
 	Minute            int    `json:"minute"`
 	Gender            int    `json:"gender"`
 	FirstNameKeyWords string `json:"first_name_key_words"`
+	MinCandidateScore int    `json:"min_candidate_score"`
 }
 
 func buildNameTestUrlPrefix() {
@@ -101,26 +110,31 @@ func readConfigFile(file string) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(bt, config)
+	err = json.Unmarshal(bt, config)
+	if err != nil {
+		return err
+	}
+
+	lastNameLength = len(config.LastName)
+	return nil
 }
 
 func readScoreData(file string) error {
-	file += ".score"
+	file += dataFileSuffix
 	bt, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil
 	}
-	return json.Unmarshal(bt, scoreData)
+	return json.Unmarshal(bt, scoreDB)
 }
 
-func printTop10() {
-	found := 0
-	for i := 100; i >= 0 && found < 10; i-- {
-		if names, ok := scoreStat[i]; ok {
-			found++
-			fmt.Printf("score: %d, names: %v\n\n", i, names)
-		}
+func readCandidateData(file string) error {
+	file += dataCandidateFileSuffix
+	bt, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil
 	}
+	return json.Unmarshal(bt, &candidates)
 }
 
 func statCalculate(score *NameScore, name string) {
@@ -131,13 +145,30 @@ func statCalculate(score *NameScore, name string) {
 }
 
 func writeScoreData() {
-	bt, err := json.Marshal(scoreData)
+	bt, err := json.Marshal(scoreDB)
 	if err != nil {
 		log.Fatalf("marshal err: %v", err)
 	}
-	err = ioutil.WriteFile(*configFile+".score", bt, 0666)
+	err = ioutil.WriteFile(*configFile+dataFileSuffix, bt, 0666)
 	if err != nil {
 		log.Fatalf("write score file error: %v", err)
+	}
+}
+
+func printCandidates() {
+	fmt.Println("----------候选名单-------------")
+	for key, value := range candidates {
+		fmt.Println(key, ":", value)
+	}
+}
+func writeCandidateData() {
+	bt, err := json.Marshal(candidates)
+	if err != nil {
+		log.Fatalf("marshal err: %v", err)
+	}
+	err = ioutil.WriteFile(*configFile+dataCandidateFileSuffix, bt, 0666)
+	if err != nil {
+		log.Fatalf("write candidate file error: %v", err)
 	}
 }
 
@@ -154,12 +185,12 @@ func nameScoring() error {
 }
 
 func oneFirstNameLoopScoring() error {
-	if scoreData == nil {
-		scoreData = newScore(0)
+	if scoreDB == nil {
+		scoreDB = newScore(0)
 	}
 
 	for i := 0; i < len(keyWords); i++ {
-		err := oneFirstNameScoring(scoreData, keyWords[i])
+		err := oneFirstNameScoring(scoreDB, keyWords[i])
 		if err != nil {
 			return err
 		}
@@ -168,7 +199,7 @@ func oneFirstNameLoopScoring() error {
 }
 
 func oneFirstNameScoring(parent *NameScore, firstName rune) error {
-	if _, ok := scoreData.More[firstName]; ok {
+	if _, ok := scoreDB.More[firstName]; ok {
 		return nil
 	}
 
@@ -177,7 +208,8 @@ func oneFirstNameScoring(parent *NameScore, firstName rune) error {
 		return err
 	}
 
-	parent.More[firstName] = newScore(score)
+	addToTree(scoreDB, score, firstName)
+
 	return nil
 }
 
@@ -197,7 +229,7 @@ func twoFirstNameLoopScoring() error {
 }
 
 func twoFirstNameScoring(firstName1, firstName2 rune) error {
-	parentNameScore, ok := scoreData.More[firstName1]
+	parentNameScore, ok := scoreDB.More[firstName1]
 	if !ok {
 		return errors.New(fmt.Sprintf("no name score for: %v", firstName1))
 	}
@@ -210,12 +242,27 @@ func twoFirstNameScoring(firstName1, firstName2 rune) error {
 		return err
 	}
 
-	if parentNameScore.More == nil {
-		parentNameScore.More = make(map[rune]*NameScore, 2)
-	}
-
-	parentNameScore.More[firstName2] = newScore(score)
+	addToTree(scoreDB, score, firstName1, firstName2)
 	return nil
+}
+
+func addToTree(nameScore *NameScore, score int, firstName ...rune) {
+	parent := nameScore
+	size := len(firstName)
+	for i := 0; i < size; i++ {
+		if parent.More == nil {
+			parent.More = make(map[rune]*NameScore, 2)
+		}
+		name := firstName[i]
+		if _, ok := parent.More[name]; ok {
+			continue
+		}
+		if i < size-1 {
+			parent.More[name] = newScore(0)
+			continue
+		}
+		parent.More[name] = newScore(score)
+	}
 }
 
 var (
@@ -228,10 +275,17 @@ func parseConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to read config file %s: %v", *configFile, err)
 	}
+
 	err = readScoreData(*configFile)
 	if err != nil {
 		return fmt.Errorf("failed to read score file: %v", err)
 	}
+
+	err = readCandidateData(*configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read candidate file: %v", err)
+	}
+
 	buildNameTestUrlPrefix()
 
 	words := strings.Split(config.FirstNameKeyWords, ",")
@@ -239,11 +293,12 @@ func parseConfig() error {
 	for i := 0; i < len(words); i++ {
 		keyWords[i] = []rune(words[i])[0]
 	}
+
 	return nil
 }
 
 var (
-	scoringFinishChan = make(chan int, 1)
+	finishChan = make(chan int, 1)
 )
 
 func loopScoring() {
@@ -251,12 +306,68 @@ func loopScoring() {
 		if err := recover(); err != nil {
 			log.Printf("namer error: %v", err)
 		}
-		scoringFinishChan <- 1
+		finishChan <- 1
 	}()
 
 	err := nameScoring()
 	if err != nil {
 		panic(err)
+	}
+}
+
+func printTop10() {
+	found := 0
+	for i := 100; i >= 0 && found < 10; i-- {
+		if names, ok := scoreStat[i]; ok {
+			found++
+			fmt.Printf("score: %d, names: %v\n\n", i, names)
+		}
+	}
+}
+
+func startCandidate() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("candidate error: %v", err)
+		}
+		finishChan <- 1
+	}()
+	for i := 100; i >= config.MinCandidateScore; i-- {
+		if names, ok := scoreStat[i]; ok {
+			for _, name := range names {
+				if _, ok := candidates[name]; ok {
+					continue
+				}
+				runes := []rune(name[lastNameLength:])
+				nameScore := scoreDB
+				for _, word := range runes {
+					nameScore = nameScore.More[word]
+				}
+				if nameScore.Read == 1 {
+					continue
+				}
+
+				fmt.Printf("是否加入候选: %s, 分数: %d  --> (y/n): ", name, nameScore.Score)
+
+				for {
+					yn := ""
+					_, err := fmt.Scanln(&yn)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+					if yn == "y" {
+						nameScore.Read = 1
+						candidates[name] = nameScore.Score
+						break
+					}
+					if yn == "n" {
+						nameScore.Read = 1
+						break
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -274,11 +385,24 @@ func main() {
 	select {
 	case sig := <-signalChan:
 		log.Printf("receive stop signal: %s", sig)
-	case <-scoringFinishChan:
+	case <-finishChan:
 		log.Println("scoring finish")
 	}
 
 	writeScoreData()
-	statCalculate(scoreData, config.LastName)
+	statCalculate(scoreDB, config.LastName)
 	printTop10()
+
+	go startCandidate()
+
+	select {
+	case sig := <-signalChan:
+		log.Printf("receive stop signal: %s", sig)
+	case <-finishChan:
+		log.Println("candidate finish")
+	}
+
+	writeScoreData()
+	writeCandidateData()
+	printCandidates()
 }
