@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,6 +17,15 @@ import (
 	"syscall"
 	"time"
 )
+
+func fatal(err error) {
+	fmt.Println(err)
+	os.Exit(1)
+}
+
+func fatalf(format string, err error) {
+	fmt.Printf(format, err)
+}
 
 const (
 	dataFileSuffix          = ".data"
@@ -57,8 +65,8 @@ type Config struct {
 	Hour              int    `json:"hour"`
 	Minute            int    `json:"minute"`
 	Gender            int    `json:"gender"`
-	FirstNameKeyWords string `json:"first_name_key_words"`
 	MinCandidateScore int    `json:"min_candidate_score"`
+	FirstNameKeyWords string `json:"first_name_key_words"`
 }
 
 func buildNameTestUrlPrefix() {
@@ -89,7 +97,7 @@ func getNameScore(firstName string) (int, error) {
 
 	scoreStr := content[:index]
 	score, err := strconv.Atoi(scoreStr)
-	log.Printf("name score: %s = %d", firstName, score)
+	fmt.Printf("name score: %s%s = %d\n", config.LastName, firstName, score)
 	return score, err
 
 }
@@ -147,11 +155,11 @@ func statCalculate(score *NameScore, name string) {
 func writeScoreData() {
 	bt, err := json.Marshal(scoreDB)
 	if err != nil {
-		log.Fatalf("marshal err: %v", err)
+		fatalf("marshal err: %v\n", err)
 	}
 	err = ioutil.WriteFile(*configFile+dataFileSuffix, bt, 0666)
 	if err != nil {
-		log.Fatalf("write score file error: %v", err)
+		fatalf("write score file error: %v\n", err)
 	}
 }
 
@@ -164,11 +172,11 @@ func printCandidates() {
 func writeCandidateData() {
 	bt, err := json.Marshal(candidates)
 	if err != nil {
-		log.Fatalf("marshal err: %v", err)
+		fatalf("marshal err: %v\n", err)
 	}
 	err = ioutil.WriteFile(*configFile+dataCandidateFileSuffix, bt, 0666)
 	if err != nil {
-		log.Fatalf("write candidate file error: %v", err)
+		fatalf("write candidate file error: %v\n", err)
 	}
 }
 
@@ -215,7 +223,7 @@ func oneFirstNameScoring(parent *NameScore, firstName rune) error {
 
 func twoFirstNameLoopScoring() error {
 	for i := 0; i < len(keyWords); i++ {
-		for j := 1; j < len(keyWords); j++ {
+		for j := 0; j < len(keyWords); j++ {
 			firstName1 := keyWords[i]
 			firstName2 := keyWords[j]
 
@@ -254,11 +262,14 @@ func addToTree(nameScore *NameScore, score int, firstName ...rune) {
 			parent.More = make(map[rune]*NameScore, 2)
 		}
 		name := firstName[i]
-		if _, ok := parent.More[name]; ok {
+		if child, ok := parent.More[name]; ok {
+			parent = child
 			continue
 		}
 		if i < size-1 {
-			parent.More[name] = newScore(0)
+			child := newScore(0)
+			parent.More[name] = child
+			parent = child
 			continue
 		}
 		parent.More[name] = newScore(score)
@@ -304,7 +315,7 @@ var (
 func loopScoring() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Printf("namer error: %v", err)
+			fmt.Printf("namer error: %v\n", err)
 		}
 		finishChan <- 1
 	}()
@@ -328,7 +339,7 @@ func printTop10() {
 func startCandidate() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Printf("candidate error: %v", err)
+			fmt.Printf("candidate error: %v\n", err)
 		}
 		finishChan <- 1
 	}()
@@ -374,7 +385,7 @@ func startCandidate() {
 func main() {
 	err := parseConfig()
 	if err != nil {
-		log.Fatal(err)
+		fatal(err)
 	}
 
 	go loopScoring()
@@ -384,9 +395,9 @@ func main() {
 
 	select {
 	case sig := <-signalChan:
-		log.Printf("receive stop signal: %s", sig)
+		fmt.Printf("receive stop signal: %s\n", sig)
 	case <-finishChan:
-		log.Println("scoring finish")
+		fmt.Println("scoring finish")
 	}
 
 	writeScoreData()
@@ -397,9 +408,9 @@ func main() {
 
 	select {
 	case sig := <-signalChan:
-		log.Printf("receive stop signal: %s", sig)
+		fmt.Printf("receive stop signal: %s\n", sig)
 	case <-finishChan:
-		log.Println("candidate finish")
+		fmt.Println("candidate finish")
 	}
 
 	writeScoreData()

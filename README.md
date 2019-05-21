@@ -24,8 +24,15 @@ go get github.com/wongoo/namer
 }
 ```
 说明: 
+- `last_name`: 姓
+- `year`: 年
+- `month`: 月
+- `day`: 日
+- `hour`: 时
+- `minute`: 分
 - `gender`: 0-男, 1-女
 - `min_candidate_score`: 最小候选分数
+- `first_name_key_words`: 关键字
 
 3. 最后, 执行命令 `namer -c config.json`, 命令会输出分数排名前10的名字列表:
 ```bash
@@ -44,4 +51,4 @@ score: 82, names: [王习意 王习义 王习复 王开习 王书望]
 ## 注意
 - 配置可以修改以后再次执行;
 - 可以`ctrl+c`中断执行,立即给出已经检测的结果;
-- 命令会生成缓存文件 `config.json.score`，请勿删除;
+- 命令会在配置文件同目录下生成后缀为`.data`的缓存文件，请勿删除;
