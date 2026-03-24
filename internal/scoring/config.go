@@ -12,7 +12,7 @@ import (
 
 // Config 评分配置
 type Config struct {
-	LastName          string `json:"last_name"`
+	Xing              string `json:"xing"`
 	Year              int    `json:"year"`
 	Month             int    `json:"month"`
 	Day               int    `json:"day"`
@@ -20,16 +20,16 @@ type Config struct {
 	Minute            int    `json:"minute"`
 	Gender            int    `json:"gender"`
 	MinCandidateScore int    `json:"min_candidate_score"`
-	FirstNameKeyWords string `json:"first_name_key_words"`
+	MingKeywords      string `json:"ming_keywords"`
 }
 
 // IsComplete 检查配置是否完整
 func (c *Config) IsComplete() bool {
-	return c.LastName != "" &&
+	return c.Xing != "" &&
 		c.Year > 0 &&
 		c.Month > 0 && c.Month <= 12 &&
 		c.Day > 0 && c.Day <= 31 &&
-		c.FirstNameKeyWords != ""
+		c.MingKeywords != ""
 }
 
 // ReadConfigFile 读取配置文件
@@ -58,8 +58,8 @@ func PromptConfig(cfg *Config) {
 // PromptConfigFrom 从指定 reader 读取用户输入补全配置
 func PromptConfigFrom(cfg *Config, r io.Reader) {
 	scanner := bufio.NewScanner(r)
-	if cfg.LastName == "" {
-		cfg.LastName = promptString(scanner, "请输入姓氏（如：王）")
+	if cfg.Xing == "" {
+		cfg.Xing = promptString(scanner, "请输入姓氏（如：王）")
 	}
 	if cfg.Year <= 0 {
 		cfg.Year = promptInt(scanner, "请输入出生年份（如：2024）")
@@ -82,8 +82,8 @@ func PromptConfigFrom(cfg *Config, r io.Reader) {
 	if cfg.MinCandidateScore <= 0 {
 		cfg.MinCandidateScore = 60
 	}
-	if cfg.FirstNameKeyWords == "" {
-		cfg.FirstNameKeyWords = promptString(scanner, "请输入名字备选字（逗号分隔，如：明,轩,浩,然）")
+	if cfg.MingKeywords == "" {
+		cfg.MingKeywords = promptString(scanner, "请输入名字备选字（逗号分隔，如：明,轩,浩,然）")
 	}
 }
 
@@ -131,7 +131,7 @@ func promptIntRange(scanner *bufio.Scanner, prompt string, min, max int) int {
 
 // NameScoring 批量评分
 func NameScoring(cfg *Config) {
-	words := strings.Split(cfg.FirstNameKeyWords, ",")
+	words := strings.Split(cfg.MingKeywords, ",")
 	keyWords := make([]rune, 0, len(words))
 	for _, w := range words {
 		w = strings.TrimSpace(w)
@@ -158,8 +158,8 @@ func NameScoring(cfg *Config) {
 	// 单字名
 	for _, c := range keyWords {
 		firstName := string(c)
-		r := CalcScore(cfg.LastName, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
-		fullName := cfg.LastName + firstName
+		r := CalcScore(cfg.Xing, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
+		fullName := cfg.Xing + firstName
 		results = append(results, nameResult{name: fullName, score: r.Total})
 		done++
 		fmt.Printf("\r评分进度: %d/%d", done, total)
@@ -169,8 +169,8 @@ func NameScoring(cfg *Config) {
 	for _, c1 := range keyWords {
 		for _, c2 := range keyWords {
 			firstName := string([]rune{c1, c2})
-			r := CalcScore(cfg.LastName, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
-			fullName := cfg.LastName + firstName
+			r := CalcScore(cfg.Xing, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
+			fullName := cfg.Xing + firstName
 			results = append(results, nameResult{name: fullName, score: r.Total})
 			done++
 			fmt.Printf("\r评分进度: %d/%d", done, total)
@@ -193,11 +193,11 @@ func NameScoring(cfg *Config) {
 
 	// 打印高分名字详情
 	fmt.Println("\n========== 高分名字详情 ==========")
-	lastRunes := []rune(cfg.LastName)
+	lastRunes := []rune(cfg.Xing)
 	for i := 0; i < count; i++ {
 		nr := results[i]
 		firstName := string([]rune(nr.name)[len(lastRunes):])
-		r := CalcScore(cfg.LastName, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
-		PrintResult(cfg.LastName, firstName, r)
+		r := CalcScore(cfg.Xing, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
+		PrintResult(cfg.Xing, firstName, r)
 	}
 }

@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/vogo/namer/internal/scoring"
@@ -31,19 +31,30 @@ func printUsage() {
 用法:
   namer                       交互式批量评分（自动引导配置）
   namer -c <配置文件>          使用指定配置文件批量评分
-  namer <姓> <名>             评估单个名字（使用已有配置中的生辰信息）
-  namer <姓> <名> <生日>       评估单个名字（指定生日，格式: 2024-03-15）
+  namer -xing 王 -ming 明轩 [-year 2024 -month 3 -day 15 -hour 10 -minute 30 -gender 1]
+                              评估单个名字（通过参数指定所有信息）
   namer -web                  启动 Web 服务（随机端口，自动打开浏览器）
   namer -web -port 8080       启动 Web 服务（指定端口）
   namer -h                    显示帮助
 
 示例:
   namer                       首次使用，交互式输入配置后批量评分
-  namer 王 明轩               评估"王明轩"这个名字
-  namer 王 明轩 2024-03-15    评估"王明轩"，指定出生日期
+  namer -xing 王 -ming 明轩   评估"王明轩"（使用已有配置中的生辰信息）
+  namer -xing 王 -ming 明轩 -year 2024 -month 3 -day 15 -hour 10 -minute 30
+                              评估"王明轩"，指定完整出生信息
   namer -c my.conf            使用 my.conf 配置文件批量评分
   namer -web                  启动 Web 界面
   namer -web -port 3000       在 3000 端口启动 Web 界面
+
+参数:
+  -xing <姓>                  姓氏
+  -ming <名>                  名字
+  -year <年>                  出生年份
+  -month <月>                 出生月份（1-12）
+  -day <日>                   出生日期（1-31）
+  -hour <时>                  出生时辰（0-23）
+  -minute <分>                出生分钟（0-59）
+  -gender <性别>              性别（1=男, 2=女）
 
 配置文件:
   默认路径: ~/.namer.json
@@ -88,8 +99,8 @@ func main() {
 		return
 	}
 
-	// namer <姓> <名> [生日]
-	if len(args) >= 2 && !strings.HasPrefix(args[0], "-") {
+	// namer -xing 王 -ming 明轩 [其他参数]
+	if flagValue(args, "-xing") != "" && flagValue(args, "-ming") != "" {
 		runSingleScore(args)
 		return
 	}
@@ -109,8 +120,8 @@ func main() {
 
 // runSingleScore 单个名字评分
 func runSingleScore(args []string) {
-	lastName := args[0]
-	firstName := args[1]
+	xing := flagValue(args, "-xing")
+	ming := flagValue(args, "-ming")
 
 	// 加载配置获取生辰信息
 	cfg := &scoring.Config{}
@@ -119,9 +130,24 @@ func runSingleScore(args []string) {
 		_ = scoring.ReadConfigFile(cfgPath, cfg)
 	}
 
-	// 如果命令行提供了生日
-	if len(args) >= 3 {
-		parseBirthday(args[2], cfg)
+	// 命令行参数覆盖配置文件
+	if v := flagValue(args, "-year"); v != "" {
+		cfg.Year, _ = strconv.Atoi(v)
+	}
+	if v := flagValue(args, "-month"); v != "" {
+		cfg.Month, _ = strconv.Atoi(v)
+	}
+	if v := flagValue(args, "-day"); v != "" {
+		cfg.Day, _ = strconv.Atoi(v)
+	}
+	if v := flagValue(args, "-hour"); v != "" {
+		cfg.Hour, _ = strconv.Atoi(v)
+	}
+	if v := flagValue(args, "-minute"); v != "" {
+		cfg.Minute, _ = strconv.Atoi(v)
+	}
+	if v := flagValue(args, "-gender"); v != "" {
+		cfg.Gender, _ = strconv.Atoi(v)
 	}
 
 	// 如果仍缺少生辰信息，使用默认值
@@ -134,24 +160,8 @@ func runSingleScore(args []string) {
 		cfg.Hour = 12
 	}
 
-	r := scoring.CalcScore(lastName, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
-	scoring.PrintResult(lastName, firstName, r)
-}
-
-// parseBirthday 解析生日字符串 "2024-03-15" 或 "2024-03-15-10" 或 "2024-03-15-10-30"
-func parseBirthday(s string, cfg *scoring.Config) {
-	parts := strings.Split(s, "-")
-	if len(parts) >= 3 {
-		fmt.Sscanf(parts[0], "%d", &cfg.Year)
-		fmt.Sscanf(parts[1], "%d", &cfg.Month)
-		fmt.Sscanf(parts[2], "%d", &cfg.Day)
-	}
-	if len(parts) >= 4 {
-		fmt.Sscanf(parts[3], "%d", &cfg.Hour)
-	}
-	if len(parts) >= 5 {
-		fmt.Sscanf(parts[4], "%d", &cfg.Minute)
-	}
+	r := scoring.CalcScore(xing, ming, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
+	scoring.PrintResult(xing, ming, r)
 }
 
 // runBatchMode 批量评分模式
@@ -173,7 +183,7 @@ func runBatchMode(configPath string) {
 
 	// 检查配置是否完整，不完整则交互补全
 	if !cfg.IsComplete() {
-		if cfg.LastName == "" {
+		if cfg.Xing == "" {
 			fmt.Println("=== namer 姓名评分工具 ===")
 			fmt.Println("首次使用，请输入以下配置信息：")
 		} else {
@@ -191,8 +201,8 @@ func runBatchMode(configPath string) {
 	}
 
 	fmt.Printf("\n姓氏: %s | 生辰: %d-%02d-%02d %02d:%02d | 备选字: %s\n",
-		cfg.LastName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute,
-		cfg.FirstNameKeyWords)
+		cfg.Xing, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute,
+		cfg.MingKeywords)
 	fmt.Println("开始批量评分...")
 
 	finishChan := make(chan int, 1)
@@ -219,12 +229,7 @@ func runBatchMode(configPath string) {
 }
 
 func hasFlag(args []string, flag string) bool {
-	for _, a := range args {
-		if a == flag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(args, flag)
 }
 
 func flagValue(args []string, flag string) string {

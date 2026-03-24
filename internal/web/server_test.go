@@ -150,7 +150,7 @@ func TestHandleBatchSingleChar(t *testing.T) {
 		t.Fatalf("status = %d", w.Code)
 	}
 	var resp batchResponse
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	// 1 single + 1 double = 2
 	if len(resp.Results) != 2 {
 		t.Errorf("results = %d, want 2", len(resp.Results))
@@ -172,7 +172,7 @@ func TestHandleScoreDifferentNames(t *testing.T) {
 			t.Errorf("%s%s: status = %d", n.last, n.first, w.Code)
 		}
 		var resp scoreResponse
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp.Total <= 0 || resp.Total > 100 {
 			t.Errorf("%s: total = %.1f", resp.Name, resp.Total)
 		}
@@ -188,7 +188,7 @@ func TestHandleBatchManyKeywords(t *testing.T) {
 		t.Fatalf("status = %d", w.Code)
 	}
 	var resp batchResponse
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	// 4 single + 16 double = 20, capped at 20
 	if len(resp.Results) != 20 {
 		t.Errorf("results = %d, want 20", len(resp.Results))

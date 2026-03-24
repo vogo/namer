@@ -27,15 +27,8 @@ namer
 ### 单个名字评分
 
 ```bash
-namer <姓> <名>               # 使用已有配置中的生辰信息
-namer <姓> <名> <生日>         # 指定生日，格式: 2024-03-15
-```
-
-示例：
-
-```bash
-namer 王 明轩
-namer 王 明轩 2024-03-15
+namer -xing 王 -ming 明轩
+namer -xing 王 -ming 明轩 -year 2024 -month 3 -day 15 -hour 10 -minute 30 -gender 1
 ```
 
 ### 指定配置文件
@@ -66,7 +59,7 @@ namer -v                      # 显示版本
 
 ```json
 {
-  "last_name": "王",
+  "xing": "王",
   "year": 2024,
   "month": 3,
   "day": 15,
@@ -74,17 +67,17 @@ namer -v                      # 显示版本
   "minute": 1,
   "gender": 0,
   "min_candidate_score": 82,
-  "first_name_key_words": "可,学,书,意,义,程,进,望"
+  "ming_keywords": "可,学,书,意,义,程,进,望"
 }
 ```
 
 | 字段 | 说明 |
 |------|------|
-| `last_name` | 姓 |
+| `xing` | 姓 |
 | `year` / `month` / `day` / `hour` / `minute` | 出生年月日时分 |
 | `gender` | 0-男, 1-女 |
 | `min_candidate_score` | 最小候选分数 |
-| `first_name_key_words` | 名字备选字（逗号分隔） |
+| `ming_keywords` | 名字备选字（逗号分隔） |
 
 ## 评分维度
 

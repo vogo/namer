@@ -26,40 +26,40 @@ type scoreRequest struct {
 
 // batchRequest 批量评分请求
 type batchRequest struct {
-	LastName  string `json:"last_name"`
-	Year      int    `json:"year"`
-	Month     int    `json:"month"`
-	Day       int    `json:"day"`
-	Hour      int    `json:"hour"`
-	Minute    int    `json:"minute"`
-	KeyWords  string `json:"key_words"`
+	LastName string `json:"last_name"`
+	Year     int    `json:"year"`
+	Month    int    `json:"month"`
+	Day      int    `json:"day"`
+	Hour     int    `json:"hour"`
+	Minute   int    `json:"minute"`
+	KeyWords string `json:"key_words"`
 }
 
 // scoreResponse 评分响应
 type scoreResponse struct {
-	Name       string          `json:"name"`
-	Total      float64         `json:"total"`
-	WuGe       float64         `json:"wuge"`
-	SanCai     float64         `json:"sancai"`
-	XiYong     float64         `json:"xiyong"`
-	WuXing     float64         `json:"wuxing"`
-	YinYang    float64         `json:"yinyang"`
-	Detail     scoreDetail     `json:"detail"`
+	Name    string      `json:"name"`
+	Total   float64     `json:"total"`
+	WuGe    float64     `json:"wuge"`
+	SanCai  float64     `json:"sancai"`
+	XiYong  float64     `json:"xiyong"`
+	WuXing  float64     `json:"wuxing"`
+	YinYang float64     `json:"yinyang"`
+	Detail  scoreDetail `json:"detail"`
 }
 
 type scoreDetail struct {
-	Strokes    []int           `json:"strokes"`
-	TianGe     int             `json:"tian_ge"`
-	RenGe      int             `json:"ren_ge"`
-	DiGe       int             `json:"di_ge"`
-	ZongGe     int             `json:"zong_ge"`
-	WaiGe      int             `json:"wai_ge"`
-	SanCaiDesc string          `json:"sancai_desc"`
-	SanCaiJX   string          `json:"sancai_jx"`
-	BaZi       string          `json:"bazi"`
-	XiYongShen string          `json:"xiyong_shen"`
-	CharWuXing []string        `json:"char_wuxing"`
-	YinYangPat string          `json:"yinyang_pat"`
+	Strokes    []int    `json:"strokes"`
+	TianGe     int      `json:"tian_ge"`
+	RenGe      int      `json:"ren_ge"`
+	DiGe       int      `json:"di_ge"`
+	ZongGe     int      `json:"zong_ge"`
+	WaiGe      int      `json:"wai_ge"`
+	SanCaiDesc string   `json:"sancai_desc"`
+	SanCaiJX   string   `json:"sancai_jx"`
+	BaZi       string   `json:"bazi"`
+	XiYongShen string   `json:"xiyong_shen"`
+	CharWuXing []string `json:"char_wuxing"`
+	YinYangPat string   `json:"yinyang_pat"`
 }
 
 type batchResponse struct {
@@ -129,7 +129,7 @@ func handleScore(w http.ResponseWriter, r *http.Request) {
 	resp := buildScoreResponse(req.LastName, req.FirstName, result)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func handleBatch(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +198,7 @@ func handleBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // OpenBrowser 打开浏览器（可替换用于测试）
@@ -222,7 +222,7 @@ func NewMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(indexHTML))
+		_, _ = w.Write([]byte(indexHTML))
 	})
 	mux.HandleFunc("/api/score", handleScore)
 	mux.HandleFunc("/api/batch", handleBatch)

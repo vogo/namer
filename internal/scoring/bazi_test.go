@@ -36,11 +36,11 @@ func TestCalcYearGanZhi(t *testing.T) {
 		wantGan int
 		wantZhi int
 	}{
-		{2024, 0, 4},   // 甲辰
-		{1984, 0, 0},   // 甲子
-		{2000, 6, 4},   // 庚辰
-		{1990, 6, 6},   // 庚午
-		{2023, 9, 3},   // 癸卯
+		{2024, 0, 4}, // 甲辰
+		{1984, 0, 0}, // 甲子
+		{2000, 6, 4}, // 庚辰
+		{1990, 6, 6}, // 庚午
+		{2023, 9, 3}, // 癸卯
 	}
 	for _, tt := range tests {
 		gz := calcYearGanZhi(tt.year)

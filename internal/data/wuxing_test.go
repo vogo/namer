@@ -165,11 +165,11 @@ func TestGeneratingElement(t *testing.T) {
 		target WuXing
 		want   WuXing
 	}{
-		{Mu, Shui},   // 水生木
-		{Huo, Mu},    // 木生火
-		{Tu, Huo},    // 火生土
-		{Jin, Tu},    // 土生金
-		{Shui, Jin},  // 金生水
+		{Mu, Shui},  // 水生木
+		{Huo, Mu},   // 木生火
+		{Tu, Huo},   // 火生土
+		{Jin, Tu},   // 土生金
+		{Shui, Jin}, // 金生水
 		{WuXingUnknown, WuXingUnknown},
 	}
 	for _, tt := range tests {

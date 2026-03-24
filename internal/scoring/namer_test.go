@@ -8,7 +8,7 @@ import (
 
 func TestReadConfigFile(t *testing.T) {
 	content := `{
-		"last_name": "王",
+		"xing": "王",
 		"year": 2024,
 		"month": 3,
 		"day": 15,
@@ -16,25 +16,25 @@ func TestReadConfigFile(t *testing.T) {
 		"minute": 30,
 		"gender": 0,
 		"min_candidate_score": 80,
-		"first_name_key_words": "明,轩"
+		"ming_keywords": "明,轩"
 	}`
 	f, err := os.CreateTemp("", "namer_test_*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.WriteString(content); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	cfg := &Config{}
 	err = ReadConfigFile(f.Name(), cfg)
 	if err != nil {
 		t.Fatalf("ReadConfigFile error: %v", err)
 	}
-	if cfg.LastName != "王" {
-		t.Errorf("LastName = %q, want 王", cfg.LastName)
+	if cfg.Xing != "王" {
+		t.Errorf("Xing = %q, want 王", cfg.Xing)
 	}
 	if cfg.Year != 2024 {
 		t.Errorf("Year = %d, want 2024", cfg.Year)
@@ -42,8 +42,8 @@ func TestReadConfigFile(t *testing.T) {
 	if cfg.Month != 3 {
 		t.Errorf("Month = %d, want 3", cfg.Month)
 	}
-	if cfg.FirstNameKeyWords != "明,轩" {
-		t.Errorf("FirstNameKeyWords = %q, want '明,轩'", cfg.FirstNameKeyWords)
+	if cfg.MingKeywords != "明,轩" {
+		t.Errorf("MingKeywords = %q, want '明,轩'", cfg.MingKeywords)
 	}
 }
 
@@ -60,11 +60,11 @@ func TestReadConfigFileInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.WriteString("not json"); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	cfg := &Config{}
 	err = ReadConfigFile(f.Name(), cfg)
@@ -75,14 +75,14 @@ func TestReadConfigFileInvalidJSON(t *testing.T) {
 
 func TestNameScoring(t *testing.T) {
 	cfg := &Config{
-		LastName:          "王",
+		Xing:              "王",
 		Year:              2024,
 		Month:             3,
 		Day:               15,
 		Hour:              10,
 		Minute:            30,
 		MinCandidateScore: 80,
-		FirstNameKeyWords: "明,轩",
+		MingKeywords:      "明,轩",
 	}
 	// NameScoring 不应 panic
 	NameScoring(cfg)
@@ -90,11 +90,11 @@ func TestNameScoring(t *testing.T) {
 
 func TestNameScoringEmpty(t *testing.T) {
 	cfg := &Config{
-		LastName:          "王",
-		Year:              2024,
-		Month:             3,
-		Day:               15,
-		FirstNameKeyWords: "",
+		Xing:         "王",
+		Year:         2024,
+		Month:        3,
+		Day:          15,
+		MingKeywords: "",
 	}
 	// 空备选字不应 panic
 	NameScoring(cfg)
@@ -102,20 +102,20 @@ func TestNameScoringEmpty(t *testing.T) {
 
 func TestNameScoringWithSpaces(t *testing.T) {
 	cfg := &Config{
-		LastName:          "王",
-		Year:              2024,
-		Month:             3,
-		Day:               15,
-		Hour:              10,
-		Minute:            30,
-		FirstNameKeyWords: " 明 , 轩 ",
+		Xing:         "王",
+		Year:         2024,
+		Month:        3,
+		Day:          15,
+		Hour:         10,
+		Minute:       30,
+		MingKeywords: " 明 , 轩 ",
 	}
 	NameScoring(cfg)
 }
 
 func TestWriteConfigFile(t *testing.T) {
 	cfg := &Config{
-		LastName:          "李",
+		Xing:              "李",
 		Year:              2000,
 		Month:             6,
 		Day:               15,
@@ -123,15 +123,15 @@ func TestWriteConfigFile(t *testing.T) {
 		Minute:            0,
 		Gender:            1,
 		MinCandidateScore: 70,
-		FirstNameKeyWords: "浩,然",
+		MingKeywords:      "浩,然",
 	}
 
 	f, err := os.CreateTemp("", "namer_write_test_*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
-	defer os.Remove(f.Name())
+	_ = f.Close()
+	defer func() { _ = os.Remove(f.Name()) }()
 
 	err = WriteConfigFile(f.Name(), cfg)
 	if err != nil {
@@ -144,14 +144,14 @@ func TestWriteConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadConfigFile error: %v", err)
 	}
-	if cfg2.LastName != "李" {
-		t.Errorf("LastName = %q, want 李", cfg2.LastName)
+	if cfg2.Xing != "李" {
+		t.Errorf("Xing = %q, want 李", cfg2.Xing)
 	}
 	if cfg2.Year != 2000 {
 		t.Errorf("Year = %d, want 2000", cfg2.Year)
 	}
-	if cfg2.FirstNameKeyWords != "浩,然" {
-		t.Errorf("FirstNameKeyWords = %q, want '浩,然'", cfg2.FirstNameKeyWords)
+	if cfg2.MingKeywords != "浩,然" {
+		t.Errorf("MingKeywords = %q, want '浩,然'", cfg2.MingKeywords)
 	}
 }
 
@@ -162,8 +162,8 @@ func TestPromptConfigFrom(t *testing.T) {
 	cfg := &Config{Hour: -1, Minute: -1} // 标记为未设置
 	PromptConfigFrom(cfg, strings.NewReader(input))
 
-	if cfg.LastName != "王" {
-		t.Errorf("LastName = %q, want 王", cfg.LastName)
+	if cfg.Xing != "王" {
+		t.Errorf("Xing = %q, want 王", cfg.Xing)
 	}
 	if cfg.Year != 2024 {
 		t.Errorf("Year = %d, want 2024", cfg.Year)
@@ -183,8 +183,8 @@ func TestPromptConfigFrom(t *testing.T) {
 	if cfg.Gender != 1 {
 		t.Errorf("Gender = %d, want 1", cfg.Gender)
 	}
-	if cfg.FirstNameKeyWords != "明,轩,浩" {
-		t.Errorf("FirstNameKeyWords = %q, want '明,轩,浩'", cfg.FirstNameKeyWords)
+	if cfg.MingKeywords != "明,轩,浩" {
+		t.Errorf("MingKeywords = %q, want '明,轩,浩'", cfg.MingKeywords)
 	}
 }
 
@@ -192,17 +192,17 @@ func TestPromptConfigFromPartial(t *testing.T) {
 	// 已有大部分配置，只补缺性别和备选字
 	input := "1\n明,轩\n"
 	cfg := &Config{
-		LastName: "李",
-		Year:     2000,
-		Month:    6,
-		Day:      15,
-		Hour:     10,
-		Minute:   30,
+		Xing:   "李",
+		Year:   2000,
+		Month:  6,
+		Day:    15,
+		Hour:   10,
+		Minute: 30,
 	}
 	PromptConfigFrom(cfg, strings.NewReader(input))
 
-	if cfg.LastName != "李" {
-		t.Errorf("LastName should remain 李, got %q", cfg.LastName)
+	if cfg.Xing != "李" {
+		t.Errorf("Xing should remain 李, got %q", cfg.Xing)
 	}
 	if cfg.Year != 2000 {
 		t.Errorf("Year should remain 2000, got %d", cfg.Year)
@@ -210,8 +210,8 @@ func TestPromptConfigFromPartial(t *testing.T) {
 	if cfg.Gender != 1 {
 		t.Errorf("Gender = %d, want 1", cfg.Gender)
 	}
-	if cfg.FirstNameKeyWords != "明,轩" {
-		t.Errorf("FirstNameKeyWords = %q, want '明,轩'", cfg.FirstNameKeyWords)
+	if cfg.MingKeywords != "明,轩" {
+		t.Errorf("MingKeywords = %q, want '明,轩'", cfg.MingKeywords)
 	}
 }
 
@@ -231,8 +231,8 @@ func TestPromptConfigFromEOF(t *testing.T) {
 	input := "王\n"
 	cfg := &Config{}
 	PromptConfigFrom(cfg, strings.NewReader(input))
-	if cfg.LastName != "王" {
-		t.Errorf("LastName = %q, want 王", cfg.LastName)
+	if cfg.Xing != "王" {
+		t.Errorf("Xing = %q, want 王", cfg.Xing)
 	}
 }
 
@@ -242,14 +242,14 @@ func TestConfigIsComplete(t *testing.T) {
 		cfg  Config
 		want bool
 	}{
-		{"完整", Config{LastName: "王", Year: 2024, Month: 3, Day: 15, FirstNameKeyWords: "明"}, true},
-		{"缺姓", Config{Year: 2024, Month: 3, Day: 15, FirstNameKeyWords: "明"}, false},
-		{"缺年", Config{LastName: "王", Month: 3, Day: 15, FirstNameKeyWords: "明"}, false},
-		{"缺月", Config{LastName: "王", Year: 2024, Day: 15, FirstNameKeyWords: "明"}, false},
-		{"缺日", Config{LastName: "王", Year: 2024, Month: 3, FirstNameKeyWords: "明"}, false},
-		{"缺备选字", Config{LastName: "王", Year: 2024, Month: 3, Day: 15}, false},
-		{"月份越界", Config{LastName: "王", Year: 2024, Month: 13, Day: 15, FirstNameKeyWords: "明"}, false},
-		{"日期越界", Config{LastName: "王", Year: 2024, Month: 3, Day: 32, FirstNameKeyWords: "明"}, false},
+		{"完整", Config{Xing: "王", Year: 2024, Month: 3, Day: 15, MingKeywords: "明"}, true},
+		{"缺姓", Config{Year: 2024, Month: 3, Day: 15, MingKeywords: "明"}, false},
+		{"缺年", Config{Xing: "王", Month: 3, Day: 15, MingKeywords: "明"}, false},
+		{"缺月", Config{Xing: "王", Year: 2024, Day: 15, MingKeywords: "明"}, false},
+		{"缺日", Config{Xing: "王", Year: 2024, Month: 3, MingKeywords: "明"}, false},
+		{"缺备选字", Config{Xing: "王", Year: 2024, Month: 3, Day: 15}, false},
+		{"月份越界", Config{Xing: "王", Year: 2024, Month: 13, Day: 15, MingKeywords: "明"}, false},
+		{"日期越界", Config{Xing: "王", Year: 2024, Month: 3, Day: 32, MingKeywords: "明"}, false},
 	}
 	for _, tt := range tests {
 		if got := tt.cfg.IsComplete(); got != tt.want {
