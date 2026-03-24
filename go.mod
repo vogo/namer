@@ -1,3 +1,3 @@
-module github.com/wongoo/namer
+module github.com/vogo/namer
 
-go 1.12
+go 1.21

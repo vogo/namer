@@ -3,417 +3,235 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
+
+	"github.com/vogo/namer/internal/scoring"
+	"github.com/vogo/namer/internal/web"
 )
 
-func fatal(err error) {
-	fmt.Println(err)
-	os.Exit(1)
-}
+const version = "1.0.0"
 
-func fatalf(format string, err error) {
-	fmt.Printf(format, err)
-}
-
-const (
-	dataFileSuffix          = ".data"
-	dataCandidateFileSuffix = ".candidate.data"
-)
-
-var (
-	baiduQimingTestUrlFormat = "https://sp0.baidu.com/5LMDcjW6BwF3otqbppnN2DJv/qiming.pae.baidu.com/data/namedetail?" +
-		"year=%d&month=%02d&day=%02d&hour=%02d&min=%02d&timeType=0&gender=0" +
-		"&flag=1&cb=jsonp1"
-	baiduScorePreviousString = "\"key\":\"score\",\"value\":\""
-	baiduTestUrlPrefix       string
-	keyWords                 []rune
-
-	config         = &Config{}
-	scoreDB        = newScore(0)
-	scoreStat      = make(map[int][]string, 100)
-	candidates     = make(map[string]int, 100)
-	lastNameLength = 0
-)
-
-type NameScore struct {
-	Score int                 `json:"s"`
-	More  map[rune]*NameScore `json:"m,omitempty"`
-	Read  int                 `json:"r"` // 0: unread, 1: read
-}
-
-func newScore(score int) *NameScore {
-	return &NameScore{Score: score, More: make(map[rune]*NameScore, 0)}
-}
-
-type Config struct {
-	LastName          string `json:"last_name"`
-	Year              int    `json:"year"`
-	Month             int    `json:"month"`
-	Day               int    `json:"day"`
-	Hour              int    `json:"hour"`
-	Minute            int    `json:"minute"`
-	Gender            int    `json:"gender"`
-	MinCandidateScore int    `json:"min_candidate_score"`
-	FirstNameKeyWords string `json:"first_name_key_words"`
-}
-
-func buildNameTestUrlPrefix() {
-	baiduTestUrlPrefix = fmt.Sprintf(baiduQimingTestUrlFormat, config.Year, config.Month, config.Day, config.Hour, config.Minute)
-}
-
-func buildNameTestUrl(firstName string) string {
-	return fmt.Sprintf(baiduTestUrlPrefix+"&fName=%s&lName=%s&_=%d", url.QueryEscape(config.LastName), url.QueryEscape(firstName), int64(time.Now().UnixNano())/int64(time.Millisecond))
-}
-
-func getNameScore(firstName string) (int, error) {
-	addr := buildNameTestUrl(firstName)
-	bt, err := request(addr)
+func defaultConfigPath() string {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return 0, err
+		return ".namer.conf"
 	}
-	content := string(bt)
-	index := strings.Index(content, baiduScorePreviousString)
-	if index <= 0 {
-		return 0, errors.New("cant find score from response: " + content)
-	}
-
-	content = content[index+len(baiduScorePreviousString):]
-	index = strings.Index(content, "\"")
-	if index <= 0 {
-		return 0, errors.New("cant find score from response: " + content)
-	}
-
-	scoreStr := content[:index]
-	score, err := strconv.Atoi(scoreStr)
-	fmt.Printf("name score: %s%s = %d\n", config.LastName, firstName, score)
-	return score, err
-
+	return filepath.Join(home, ".namer.conf")
 }
 
-func request(addr string) ([]byte, error) {
-	time.Sleep(time.Millisecond * 300)
-	resp, err := http.Get(addr)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+func printUsage() {
+	fmt.Printf(`namer v%s - 中国姓名阴阳五行评分工具
 
-	return ioutil.ReadAll(resp.Body)
-}
+用法:
+  namer                       交互式批量评分（自动引导配置）
+  namer -c <配置文件>          使用指定配置文件批量评分
+  namer <姓> <名>             评估单个名字（使用已有配置中的生辰信息）
+  namer <姓> <名> <生日>       评估单个名字（指定生日，格式: 2024-03-15）
+  namer -web                  启动 Web 服务（随机端口，自动打开浏览器）
+  namer -web -port 8080       启动 Web 服务（指定端口）
+  namer -h                    显示帮助
 
-func readConfigFile(file string) error {
-	bt, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(bt, config)
-	if err != nil {
-		return err
-	}
+示例:
+  namer                       首次使用，交互式输入配置后批量评分
+  namer 王 明轩               评估"王明轩"这个名字
+  namer 王 明轩 2024-03-15    评估"王明轩"，指定出生日期
+  namer -c my.conf            使用 my.conf 配置文件批量评分
+  namer -web                  启动 Web 界面
+  namer -web -port 3000       在 3000 端口启动 Web 界面
 
-	lastNameLength = len(config.LastName)
-	return nil
-}
+配置文件:
+  默认路径: ~/.namer.conf
+  首次运行时会交互式引导创建配置文件，配置项包括：
+    - 姓氏、出生年月日时分、性别
+    - 名字备选字（逗号分隔）
 
-func readScoreData(file string) error {
-	file += dataFileSuffix
-	bt, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil
-	}
-	return json.Unmarshal(bt, scoreDB)
-}
-
-func readCandidateData(file string) error {
-	file += dataCandidateFileSuffix
-	bt, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil
-	}
-	return json.Unmarshal(bt, &candidates)
-}
-
-func statCalculate(score *NameScore, name string) {
-	scoreStat[score.Score] = append(scoreStat[score.Score], name)
-	for key, value := range score.More {
-		statCalculate(value, name+string(key))
-	}
-}
-
-func writeScoreData() {
-	bt, err := json.Marshal(scoreDB)
-	if err != nil {
-		fatalf("marshal err: %v\n", err)
-	}
-	err = ioutil.WriteFile(*configFile+dataFileSuffix, bt, 0666)
-	if err != nil {
-		fatalf("write score file error: %v\n", err)
-	}
-}
-
-func printCandidates() {
-	fmt.Println("----------候选名单-------------")
-	for key, value := range candidates {
-		fmt.Println(key, ":", value)
-	}
-}
-func writeCandidateData() {
-	bt, err := json.Marshal(candidates)
-	if err != nil {
-		fatalf("marshal err: %v\n", err)
-	}
-	err = ioutil.WriteFile(*configFile+dataCandidateFileSuffix, bt, 0666)
-	if err != nil {
-		fatalf("write candidate file error: %v\n", err)
-	}
-}
-
-func nameScoring() error {
-	err := oneFirstNameLoopScoring()
-	if err != nil {
-		return err
-	}
-	err = twoFirstNameLoopScoring()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func oneFirstNameLoopScoring() error {
-	if scoreDB == nil {
-		scoreDB = newScore(0)
-	}
-
-	for i := 0; i < len(keyWords); i++ {
-		err := oneFirstNameScoring(scoreDB, keyWords[i])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func oneFirstNameScoring(parent *NameScore, firstName rune) error {
-	if _, ok := scoreDB.More[firstName]; ok {
-		return nil
-	}
-
-	score, err := getNameScore(string(firstName))
-	if err != nil {
-		return err
-	}
-
-	addToTree(scoreDB, score, firstName)
-
-	return nil
-}
-
-func twoFirstNameLoopScoring() error {
-	for i := 0; i < len(keyWords); i++ {
-		for j := 0; j < len(keyWords); j++ {
-			firstName1 := keyWords[i]
-			firstName2 := keyWords[j]
-
-			err := twoFirstNameScoring(firstName1, firstName2)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func twoFirstNameScoring(firstName1, firstName2 rune) error {
-	parentNameScore, ok := scoreDB.More[firstName1]
-	if !ok {
-		return errors.New(fmt.Sprintf("no name score for: %v", firstName1))
-	}
-	if _, ok := parentNameScore.More[firstName2]; ok {
-		return nil
-	}
-
-	score, err := getNameScore(string([]rune{firstName1, firstName2}))
-	if err != nil {
-		return err
-	}
-
-	addToTree(scoreDB, score, firstName1, firstName2)
-	return nil
-}
-
-func addToTree(nameScore *NameScore, score int, firstName ...rune) {
-	parent := nameScore
-	size := len(firstName)
-	for i := 0; i < size; i++ {
-		if parent.More == nil {
-			parent.More = make(map[rune]*NameScore, 2)
-		}
-		name := firstName[i]
-		if child, ok := parent.More[name]; ok {
-			parent = child
-			continue
-		}
-		if i < size-1 {
-			child := newScore(0)
-			parent.More[name] = child
-			parent = child
-			continue
-		}
-		parent.More[name] = newScore(score)
-	}
-}
-
-var (
-	configFile = flag.String("c", "", "config file")
-)
-
-func parseConfig() error {
-	flag.Parse()
-	err := readConfigFile(*configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read config file %s: %v", *configFile, err)
-	}
-
-	err = readScoreData(*configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read score file: %v", err)
-	}
-
-	err = readCandidateData(*configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read candidate file: %v", err)
-	}
-
-	buildNameTestUrlPrefix()
-
-	words := strings.Split(config.FirstNameKeyWords, ",")
-	keyWords = make([]rune, len(words))
-	for i := 0; i < len(words); i++ {
-		keyWords[i] = []rune(words[i])[0]
-	}
-
-	return nil
-}
-
-var (
-	finishChan = make(chan int, 1)
-)
-
-func loopScoring() {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Printf("namer error: %v\n", err)
-		}
-		finishChan <- 1
-	}()
-
-	err := nameScoring()
-	if err != nil {
-		panic(err)
-	}
-}
-
-func printTop10() {
-	found := 0
-	for i := 100; i >= 0 && found < 10; i-- {
-		if names, ok := scoreStat[i]; ok {
-			found++
-			fmt.Printf("score: %d, names: %v\n\n", i, names)
-		}
-	}
-}
-
-func startCandidate() {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Printf("candidate error: %v\n", err)
-		}
-		finishChan <- 1
-	}()
-	for i := 100; i >= config.MinCandidateScore; i-- {
-		if names, ok := scoreStat[i]; ok {
-			for _, name := range names {
-				if _, ok := candidates[name]; ok {
-					continue
-				}
-				runes := []rune(name[lastNameLength:])
-				nameScore := scoreDB
-				for _, word := range runes {
-					nameScore = nameScore.More[word]
-				}
-				if nameScore.Read == 1 {
-					continue
-				}
-
-				fmt.Printf("是否加入候选: %s, 分数: %d  --> (y/n): ", name, nameScore.Score)
-
-				for {
-					yn := ""
-					_, err := fmt.Scanln(&yn)
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
-					if yn == "y" {
-						nameScore.Read = 1
-						candidates[name] = nameScore.Score
-						break
-					}
-					if yn == "n" {
-						nameScore.Read = 1
-						break
-					}
-				}
-			}
-		}
-	}
+评分维度（总分100）:
+  五格数理  30分    天格、人格、地格、总格、外格的数理吉凶
+  三才配置  25分    天人地三才的五行生克关系
+  喜用神    20分    名字五行是否补益八字喜用神
+  内部五行  15分    姓名各字之间的五行生克
+  阴阳平衡  10分    姓名各字笔画的阴阳搭配
+`, version)
 }
 
 func main() {
-	err := parseConfig()
-	if err != nil {
-		fatal(err)
+	args := os.Args[1:]
+
+	// 帮助
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
+		printUsage()
+		return
 	}
 
-	go loopScoring()
+	// 版本
+	if len(args) == 1 && (args[0] == "-v" || args[0] == "--version") {
+		fmt.Printf("namer v%s\n", version)
+		return
+	}
+
+	// namer -web [-port 8080]
+	if hasFlag(args, "-web") {
+		port := 0
+		if p := flagValue(args, "-port"); p != "" {
+			port, _ = strconv.Atoi(p)
+		}
+		if err := web.Start(port); err != nil {
+			fmt.Printf("web 服务启动失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// namer <姓> <名> [生日]
+	if len(args) >= 2 && !strings.HasPrefix(args[0], "-") {
+		runSingleScore(args)
+		return
+	}
+
+	// namer -c <file>
+	configPath := ""
+	for i, a := range args {
+		if a == "-c" && i+1 < len(args) {
+			configPath = args[i+1]
+			break
+		}
+	}
+
+	// 默认批量模式
+	runBatchMode(configPath)
+}
+
+// runSingleScore 单个名字评分
+func runSingleScore(args []string) {
+	lastName := args[0]
+	firstName := args[1]
+
+	// 加载配置获取生辰信息
+	cfg := &scoring.Config{}
+	cfgPath := defaultConfigPath()
+	if _, err := os.Stat(cfgPath); err == nil {
+		_ = scoring.ReadConfigFile(cfgPath, cfg)
+	}
+
+	// 如果命令行提供了生日
+	if len(args) >= 3 {
+		parseBirthday(args[2], cfg)
+	}
+
+	// 如果仍缺少生辰信息，使用默认值
+	if cfg.Year <= 0 {
+		fmt.Println("提示: 未找到生辰配置，使用默认生辰(2024-01-01 12:00)计算喜用神")
+		fmt.Printf("      运行 namer 进入交互模式可配置生辰信息\n\n")
+		cfg.Year = 2024
+		cfg.Month = 1
+		cfg.Day = 1
+		cfg.Hour = 12
+	}
+
+	r := scoring.CalcScore(lastName, firstName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute)
+	scoring.PrintResult(lastName, firstName, r)
+}
+
+// parseBirthday 解析生日字符串 "2024-03-15" 或 "2024-03-15-10" 或 "2024-03-15-10-30"
+func parseBirthday(s string, cfg *scoring.Config) {
+	parts := strings.Split(s, "-")
+	if len(parts) >= 3 {
+		fmt.Sscanf(parts[0], "%d", &cfg.Year)
+		fmt.Sscanf(parts[1], "%d", &cfg.Month)
+		fmt.Sscanf(parts[2], "%d", &cfg.Day)
+	}
+	if len(parts) >= 4 {
+		fmt.Sscanf(parts[3], "%d", &cfg.Hour)
+	}
+	if len(parts) >= 5 {
+		fmt.Sscanf(parts[4], "%d", &cfg.Minute)
+	}
+}
+
+// runBatchMode 批量评分模式
+func runBatchMode(configPath string) {
+	if configPath == "" {
+		configPath = defaultConfigPath()
+	}
+
+	cfg := &scoring.Config{}
+
+	// 尝试读取已有配置
+	if _, err := os.Stat(configPath); err == nil {
+		if err := scoring.ReadConfigFile(configPath, cfg); err != nil {
+			fmt.Printf("配置文件读取失败: %v\n", err)
+			fmt.Println("将重新引导配置...")
+			cfg = &scoring.Config{}
+		}
+	}
+
+	// 检查配置是否完整，不完整则交互补全
+	if !cfg.IsComplete() {
+		if cfg.LastName == "" {
+			fmt.Println("=== namer 姓名评分工具 ===")
+			fmt.Println("首次使用，请输入以下配置信息：")
+		} else {
+			fmt.Println("配置信息不完整，请补充以下内容：")
+		}
+		fmt.Println()
+		scoring.PromptConfig(cfg)
+
+		// 保存配置
+		if err := scoring.WriteConfigFile(configPath, cfg); err != nil {
+			fmt.Printf("配置保存失败: %v\n", err)
+		} else {
+			fmt.Printf("\n配置已保存到: %s\n", configPath)
+		}
+	}
+
+	fmt.Printf("\n姓氏: %s | 生辰: %d-%02d-%02d %02d:%02d | 备选字: %s\n",
+		cfg.LastName, cfg.Year, cfg.Month, cfg.Day, cfg.Hour, cfg.Minute,
+		cfg.FirstNameKeyWords)
+	fmt.Println("开始批量评分...")
+
+	finishChan := make(chan int, 1)
+
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				fmt.Printf("\n评分异常: %v\n", err)
+			}
+			finishChan <- 1
+		}()
+		scoring.NameScoring(cfg)
+	}()
 
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case sig := <-signalChan:
-		fmt.Printf("receive stop signal: %s\n", sig)
+		fmt.Printf("\n收到中断信号: %s\n", sig)
 	case <-finishChan:
-		fmt.Println("scoring finish")
+		fmt.Println("\n评分完成!")
 	}
+}
 
-	writeScoreData()
-	statCalculate(scoreDB, config.LastName)
-	printTop10()
-
-	go startCandidate()
-
-	select {
-	case sig := <-signalChan:
-		fmt.Printf("receive stop signal: %s\n", sig)
-	case <-finishChan:
-		fmt.Println("candidate finish")
+func hasFlag(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag {
+			return true
+		}
 	}
+	return false
+}
 
-	writeScoreData()
-	writeCandidateData()
-	printCandidates()
+func flagValue(args []string, flag string) string {
+	for i, a := range args {
+		if a == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
