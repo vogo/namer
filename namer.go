@@ -20,9 +20,9 @@ const version = "1.0.0"
 func defaultConfigPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".namer.conf"
+		return ".namer.json"
 	}
-	return filepath.Join(home, ".namer.conf")
+	return filepath.Join(home, ".namer.json")
 }
 
 func printUsage() {
@@ -46,7 +46,7 @@ func printUsage() {
   namer -web -port 3000       在 3000 端口启动 Web 界面
 
 配置文件:
-  默认路径: ~/.namer.conf
+  默认路径: ~/.namer.json
   首次运行时会交互式引导创建配置文件，配置项包括：
     - 姓氏、出生年月日时分、性别
     - 名字备选字（逗号分隔）
