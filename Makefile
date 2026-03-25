@@ -8,6 +8,9 @@ format:
 	go fmt ./...
 
 test:
-	go test ./... -v
+	go test $(shell go list ./... | grep -v /integrations/) -v
+
+integration:
+	go test ./integrations/... -v -count=1 -timeout=120s
 
 build: format lint test
