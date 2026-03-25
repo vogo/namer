@@ -100,7 +100,10 @@ score: 89, names: [王望进 王开]
 score: 88, names: [王望程 王望开 王习程 王程意 王程义 王程进 王计开]
 ```
 
-## 注意
+## Agent Skill
 
-- 配置可以修改后再次执行
-- 可以 `Ctrl+C` 中断执行，立即给出已检测的结果
+告诉Agent: `请安装 namer skill：https://raw.githubusercontent.com/vogo/namer/refs/heads/main/SKILL.md，安装 namer 工具，并学习其使用方法`
+
+然后询问Agent: 
+- `请评估王伟这个名字的五行`
+- `姓王，男，1990年1月1日12点0分，批量生成建议名字`
