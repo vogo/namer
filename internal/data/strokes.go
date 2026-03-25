@@ -2568,5 +2568,32 @@ func CharStroke(c rune) int {
 	if Strokes22[c] {
 		return 22
 	}
+	if Strokes23[c] {
+		return 23
+	}
+	if Strokes24[c] {
+		return 24
+	}
+	if Strokes25[c] {
+		return 25
+	}
+	if Strokes26[c] {
+		return 26
+	}
+	if Strokes27[c] {
+		return 27
+	}
+	if Strokes28[c] {
+		return 28
+	}
+	if Strokes29[c] {
+		return 29
+	}
+	if Strokes30[c] {
+		return 30
+	}
+	if Strokes32[c] {
+		return 32
+	}
 	return 0
 }
