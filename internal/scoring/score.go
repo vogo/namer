@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/vogo/namer/internal/data"
+	strokesdata "github.com/vogo/namer/internal/data/strokes"
 )
 
 // ScoreResult 评分结果
@@ -35,7 +36,7 @@ func CalcScore(lastName, firstName string, year, month, day, hour, minute int) S
 	// 1. 计算笔画
 	strokes := make([]int, len(allRunes))
 	for i, c := range allRunes {
-		strokes[i] = data.CharStroke(c)
+		strokes[i] = strokesdata.CharStroke(c)
 	}
 
 	lastStrokes := strokes[:len(lastRunes)]

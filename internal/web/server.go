@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/vogo/namer/internal/data"
+	"github.com/vogo/namer/internal/data/strokes"
 	"github.com/vogo/namer/internal/scoring"
 )
 
@@ -75,7 +76,7 @@ func buildScoreResponse(lastName, firstName string, r scoring.ScoreResult) score
 
 	strokeNames := make([]int, len(allRunes))
 	for i, c := range allRunes {
-		strokeNames[i] = data.CharStroke(c)
+		strokeNames[i] = strokes.CharStroke(c)
 	}
 
 	sanCaiJX := ""
